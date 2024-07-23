@@ -1,10 +1,20 @@
 use actix_web::{web, HttpResponse, Responder};
+use serde_json::json;
 
-pub(crate) async fn user_profile(path: web::Path<u32>) -> impl Responder {
-    let id = path.into_inner();
-    HttpResponse::Ok().body(format!("User profile for user {}", id))
+pub(crate) async fn user_profile(path: web::Path<String>) -> impl Responder {
+    match path.parse::<u32>() {
+        Ok(id) => HttpResponse::Ok().json(json!({
+            "message": "From user profile",
+            "id": id
+        })),
+        Err(_) => HttpResponse::BadRequest().json(json!({
+            "error": "Invalid ID format"
+        })),
+    }
 }
 
 pub(crate) async fn user_update() -> impl Responder {
-    HttpResponse::Ok().body("User index")
+    HttpResponse::Ok().json(json!({
+        "message": "From user update",
+    }))
 }
