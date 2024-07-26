@@ -1,8 +1,8 @@
-use std::sync::Arc;
-
 use actix_web::{web, App, HttpServer};
+use db::db::AppState;
 use routes::configure_routes;
 mod db;
+mod db_operations;
 mod middleware;
 mod models;
 mod responses;
@@ -13,14 +13,10 @@ mod validators;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let mongo_client = db::get_mongo_client()
-        .await
-        .expect("Failed to initialize MongoDB client");
-    let mongo_client = Arc::new(mongo_client);
-
+    let app_state = web::Data::new(AppState::new().await);
     HttpServer::new(move || {
         App::new()
-            .app_data(web::Data::new(mongo_client.clone()))
+            .app_data(app_state.clone())
             .configure(configure_routes)
     })
     .bind("127.0.0.1:8080")?

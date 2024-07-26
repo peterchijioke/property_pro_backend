@@ -1,14 +1,15 @@
 use std::sync::Arc;
 
+use crate::db::db::AppState;
+use crate::db_operations;
 use crate::models::user::{UserModel, UserNoPassword};
-use crate::utils::hash;
+use crate::utils::hash::hash_password;
 use crate::validators::register_validator::RegisterRequest;
 use actix_web::{web, HttpResponse, Responder};
 use mongodb::Client;
 use serde::Serialize;
 use serde_json::error::Error as SerdeError;
 use validator::Validate;
-
 #[derive(Serialize)]
 pub struct AuthStruct {
     pub message: String,
@@ -21,7 +22,7 @@ pub struct ErrorResponse {
     pub error_messages: Vec<String>,
 }
 
-pub async fn auth_create(client: web::Data<Arc<Client>>, req_body: web::Bytes) -> impl Responder {
+pub async fn auth_create(client: web::Data<AppState>, req_body: web::Bytes) -> impl Responder {
     let register_req: Result<RegisterRequest, SerdeError> = serde_json::from_slice(&req_body);
     match register_req {
         Ok(register_request) => {
@@ -42,28 +43,33 @@ pub async fn auth_create(client: web::Data<Arc<Client>>, req_body: web::Bytes) -
                 };
                 return HttpResponse::BadRequest().json(error_response);
             }
+
+            let hashed_password = match hash_password(&register_request.password) {
+                Ok(password) => password,
+                Err(e) => {
+                    eprintln!("Failed to hash password: {:?}", e);
+                    panic!("Password hashing failed")
+                }
+            };
+
             let new_user = UserModel {
+                id: None,
                 first_name: register_request.first_name.clone(),
                 last_name: register_request.last_name.clone(),
                 phone: register_request.phone.clone(),
                 email: register_request.email.clone(),
-                password: "".to_string(),
+                password: hashed_password,
             };
 
-            let result = UserModel::create(&client, new_user).await;
-
-            match result {
-                Ok(_) => {
-                    let responder = UserNoPassword {
-                        first_name: register_request.first_name.clone(),
-                        last_name: register_request.last_name.clone(),
-                        email: register_request.email.clone(),
-                        phone: register_request.phone.clone(),
-                    };
-                    HttpResponse::Ok().json(responder)
-                }
+            match db_operations::user_db_operations::insert_user(
+                &client.db.collection("users"),
+                new_user,
+            )
+            .await
+            {
+                Ok(_) => HttpResponse::Created().body("User registered"),
                 Err(e) => HttpResponse::InternalServerError()
-                    .body(format!("Failed to create user: {:?}", e)),
+                    .body(format!("Failed to register user: {:?}", e)),
             }
         }
         Err(e) => {

@@ -1,4 +1,4 @@
-use actix_web::{dev::ServiceRequest, Error, HttpMessage, HttpResponse, Result};
+use actix_web::{dev::ServiceRequest, Error, HttpMessage, Result};
 use actix_web_httpauth::extractors::bearer::BearerAuth;
 use hmac::{Hmac, Mac};
 use jwt::VerifyWithKey;

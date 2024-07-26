@@ -1,3 +1,4 @@
+use mongodb::bson::oid::ObjectId;
 use mongodb::{
     bson::{doc, Document},
     error::Result,
@@ -5,13 +6,15 @@ use mongodb::{
 };
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct UserModel {
+    #[serde(rename = "_id")]
+    pub id: Option<ObjectId>,
     pub first_name: String,
-    pub email: String,
-    pub password: String,
     pub last_name: String,
     pub phone: String,
+    pub email: String,
+    pub password: String,
 }
 
 #[derive(Serialize, Deserialize)]
