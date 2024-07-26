@@ -1,72 +1,33 @@
-use actix_web::body::EitherBody;
-use actix_web::{
-    dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
-    Error, HttpResponse,
-};
-use futures_util::future::{ok, LocalBoxFuture, Ready};
-use serde_json::json;
-use std::rc::Rc;
+use actix_web::{dev::ServiceRequest, Error, HttpMessage, HttpResponse, Result};
+use actix_web_httpauth::extractors::bearer::BearerAuth;
+use hmac::{Hmac, Mac};
+use jwt::VerifyWithKey;
+use serde::{Deserialize, Serialize};
+use sha2::Sha256;
+use std::env;
 
-pub struct AuthMiddleware;
-
-impl<S, B> Transform<S, ServiceRequest> for AuthMiddleware
-where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
-    S::Future: 'static,
-    B: 'static,
-{
-    type Response = ServiceResponse<EitherBody<B>>;
-    type Error = Error;
-    type Transform = AuthMiddlewareMiddleware<S, B>;
-    type InitError = ();
-    type Future = Ready<Result<Self::Transform, Self::InitError>>;
-
-    fn new_transform(&self, service: S) -> Self::Future {
-        ok(AuthMiddlewareMiddleware {
-            service: Rc::new(service),
-            _phantom: std::marker::PhantomData,
-        })
-    }
+#[derive(Serialize, Deserialize, Clone)]
+pub struct TokenClaims {
+    id: i32,
 }
 
-pub struct AuthMiddlewareMiddleware<S, B> {
-    service: Rc<S>,
-    _phantom: std::marker::PhantomData<B>, // Add this line
-}
+pub async fn auth_middleware(
+    req: ServiceRequest,
+    credentials: BearerAuth,
+) -> Result<ServiceRequest, (Error, ServiceRequest)> {
+    let secret_key = env::var("JWT_SECRET").expect("JWT_SECRET must be set");
+    let key: Hmac<Sha256> = Hmac::new_from_slice(secret_key.as_bytes()).unwrap();
+    let token_string = credentials.token();
 
-impl<S, B> Service<ServiceRequest> for AuthMiddlewareMiddleware<S, B>
-where
-    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
-    S::Future: 'static,
-    B: 'static,
-{
-    type Response = ServiceResponse<EitherBody<B>>;
-    type Error = Error;
-    type Future = LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
+    let claims: Result<TokenClaims, &str> = token_string
+        .verify_with_key(&key)
+        .map_err(|_| "Invalid token");
 
-    forward_ready!(service);
-
-    fn call(&self, req: ServiceRequest) -> Self::Future {
-        // Perform your authentication logic here
-        let auth_header = req.headers().get("Authorization");
-
-        if let Some(auth_value) = auth_header {
-            // Add your token validation logic here
-            if auth_value == "Bearer mysecrettoken" {
-                let fut = self.service.call(req);
-                return Box::pin(async move {
-                    let res = fut.await?.map_into_left_body();
-                    Ok(res)
-                });
-            }
+    match claims {
+        Ok(value) => {
+            req.extensions_mut().insert(value);
+            Ok(req)
         }
-
-        Box::pin(async move {
-            let (req, _pl) = req.into_parts();
-            let res = HttpResponse::Unauthorized()
-                .json(json!({ "message": "Not authorized" }))
-                .map_into_right_body();
-            Ok(ServiceResponse::new(req, res))
-        })
+        Err(_) => Err((actix_web::error::ErrorUnauthorized("Invalid token"), req)),
     }
 }
