@@ -1,9 +1,5 @@
 use mongodb::bson::oid::ObjectId;
-use mongodb::{
-    bson::{doc, Document},
-    error::Result,
-    Client, Collection,
-};
+use mongodb::{bson::doc, error::Result as MongoErrorResult, Collection};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -26,18 +22,18 @@ pub struct UserNoPassword {
 }
 
 impl UserModel {
-    fn collection(client: &Client) -> Collection<UserModel> {
-        client.database("mydb").collection("users")
-    }
-
-    pub async fn create(client: &Client, new_user: UserModel) -> Result<()> {
-        let collection = Self::collection(client);
+    pub async fn create(
+        collection: Collection<UserModel>,
+        new_user: UserModel,
+    ) -> MongoErrorResult<()> {
         collection.insert_one(new_user, None).await.map(|_| ())
     }
 
-    pub async fn find_by_username(client: &Client, username: &str) -> Result<Option<UserModel>> {
-        let collection = Self::collection(client);
-        let filter = doc! { "username": username };
+    pub async fn find_by_username(
+        collection: Collection<UserModel>,
+        email: &str,
+    ) -> MongoErrorResult<Option<UserModel>> {
+        let filter = doc! { "email":&email };
         collection.find_one(filter, None).await
     }
 }

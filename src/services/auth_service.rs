@@ -1,15 +1,17 @@
-use std::sync::Arc;
-
-use crate::db::db::AppState;
-use crate::db_operations;
-use crate::models::user::{UserModel, UserNoPassword};
-use crate::utils::hash::hash_password;
-use crate::validators::register_validator::RegisterRequest;
+// src/handlers/user.rs
 use actix_web::{web, HttpResponse, Responder};
-use mongodb::Client;
+use mongodb::{bson::doc, bson::oid::ObjectId};
 use serde::Serialize;
 use serde_json::error::Error as SerdeError;
 use validator::Validate;
+
+use crate::db::db::AppState;
+use crate::db_operations;
+use crate::models::user::UserModel;
+use crate::utils::error_handler::{ApiError, ApiResponse};
+use crate::utils::hash::hash_password;
+use crate::validators::register_validator::RegisterRequest;
+
 #[derive(Serialize)]
 pub struct AuthStruct {
     pub message: String,
@@ -22,7 +24,10 @@ pub struct ErrorResponse {
     pub error_messages: Vec<String>,
 }
 
-pub async fn auth_create(client: web::Data<AppState>, req_body: web::Bytes) -> impl Responder {
+pub async fn auth_create(
+    client: web::Data<AppState>,
+    req_body: web::Bytes,
+) -> Result<HttpResponse, ApiError> {
     let register_req: Result<RegisterRequest, SerdeError> = serde_json::from_slice(&req_body);
     match register_req {
         Ok(register_request) => {
@@ -37,48 +42,57 @@ pub async fn auth_create(client: web::Data<AppState>, req_body: web::Bytes) -> i
                         })
                     })
                     .collect();
-                let error_response = ErrorResponse {
+
+                return Ok(HttpResponse::BadRequest().json(ErrorResponse {
                     error: "Validation failed".to_string(),
                     error_messages,
-                };
-                return HttpResponse::BadRequest().json(error_response);
+                }));
             }
 
-            let hashed_password = match hash_password(&register_request.password) {
-                Ok(password) => password,
-                Err(e) => {
-                    eprintln!("Failed to hash password: {:?}", e);
-                    panic!("Password hashing failed")
-                }
-            };
-
-            let new_user = UserModel {
-                id: None,
-                first_name: register_request.first_name.clone(),
-                last_name: register_request.last_name.clone(),
-                phone: register_request.phone.clone(),
-                email: register_request.email.clone(),
-                password: hashed_password,
-            };
-
-            match db_operations::user_db_operations::insert_user(
+            let user_exists = db_operations::user_db_operations::find_user_by_email(
                 &client.db.collection("users"),
-                new_user,
+                &register_request.email,
             )
-            .await
-            {
-                Ok(_) => HttpResponse::Created().body("User registered"),
-                Err(e) => HttpResponse::InternalServerError()
-                    .body(format!("Failed to register user: {:?}", e)),
+            .await;
+            match user_exists {
+                Some(_) => Err(ApiError::ValidationError(format!(
+                    "User with email {} already exists",
+                    register_request.email
+                ))),
+                None => {
+                    let hashed_password = match hash_password(&register_request.password) {
+                        Ok(password) => password,
+                        Err(_) => return Err(ApiError::PasswordHashingError),
+                    };
+
+                    let new_user = UserModel {
+                        id: Some(ObjectId::new()),
+                        first_name: register_request.first_name.clone(),
+                        last_name: register_request.last_name.clone(),
+                        phone: register_request.phone.clone(),
+                        email: register_request.email.clone(),
+                        password: hashed_password,
+                    };
+
+                    match db_operations::user_db_operations::insert_user(
+                        &client.db.collection("users"),
+                        new_user,
+                    )
+                    .await
+                    {
+                        Ok(_) => {
+                            let response = ApiResponse {
+                                status: "success".to_string(),
+                                message: "User registered".to_string(),
+                            };
+                            Ok(HttpResponse::Created().json(response))
+                        }
+                        Err(e) => Err(ApiError::DatabaseError(e.to_string())),
+                    }
+                }
             }
         }
-        Err(e) => {
-            let error_response = ErrorResponse {
-                error: "Invalid request data".to_string(),
-                error_messages: vec![e.to_string()],
-            };
-            HttpResponse::BadRequest().json(error_response)
-        }
+        Err(e) => Err(ApiError::InvalidRequestData(e.to_string())),
     }
 }
 

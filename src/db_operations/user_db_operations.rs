@@ -1,6 +1,5 @@
 // db_operations.rs
 use crate::models::user::UserModel;
-use mongodb::bson::oid::ObjectId;
 use mongodb::{bson::doc, Collection};
 
 pub async fn insert_user(
