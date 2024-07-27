@@ -10,6 +10,7 @@ mod routes;
 mod services;
 mod utils;
 mod validators;
+extern crate dotenv;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {

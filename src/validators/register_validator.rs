@@ -57,3 +57,13 @@ pub struct RegisterRequest {
     #[validate(custom(function = "validate_password"))]
     pub password: String,
 }
+
+#[derive(Deserialize, Validate)]
+pub struct LoginRequest {
+    #[validate(email)]
+    pub email: String,
+
+    #[validate(length(min = 8, message = "Password must be at least 8 characters long"))]
+    #[validate(custom(function = "validate_password"))]
+    pub password: String,
+}
