@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::env;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TokenClaims {
-    id: Option<ObjectId>,
+    pub id: Option<ObjectId>,
 }
 
 pub async fn auth_middleware(

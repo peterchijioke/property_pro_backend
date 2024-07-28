@@ -12,10 +12,23 @@ pub struct UserModel {
     pub password: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserNoPassword {
+    pub id: Option<ObjectId>,
     pub first_name: String,
     pub email: String,
     pub last_name: String,
     pub phone: String,
+}
+
+impl UserModel {
+    pub fn without_password(self) -> UserNoPassword {
+        UserNoPassword {
+            id: self.id,
+            first_name: self.first_name,
+            last_name: self.last_name,
+            phone: self.phone,
+            email: self.email,
+        }
+    }
 }
