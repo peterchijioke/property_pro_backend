@@ -24,7 +24,7 @@ pub async fn find_user_by_id(
     collection: &Collection<UserModel>,
     id: Option<ObjectId>,
 ) -> Option<UserModel> {
-    let filter = doc! { "id": id };
+    let filter = doc! { "_id": id };
     collection.find_one(filter, None).await.ok().flatten()
 }
 
