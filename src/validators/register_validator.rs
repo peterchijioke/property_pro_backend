@@ -58,6 +58,32 @@ pub struct RegisterRequest {
     pub password: String,
 }
 
+#[derive(Debug, Validate, Deserialize)]
+pub struct UpdateRequest {
+    #[validate(length(min = 1))]
+    pub first_name: Option<String>,
+
+    #[validate(length(min = 1))]
+    pub last_name: Option<String>,
+
+    #[validate(length(min = 11, message = "Phone number must be 11 digits"))]
+    #[validate(custom(function = "validate_phone_number"))]
+    pub phone: Option<String>,
+
+    #[validate(email)]
+    pub email: Option<String>,
+}
+
+#[derive(Debug, Validate, Deserialize)]
+pub struct UpdatePassword {
+    #[validate(length(min = 8, message = "Password must be at least 8 characters long"))]
+    #[validate(custom(function = "validate_password"))]
+    pub password: String,
+    #[validate(length(min = 8, message = "Password must be at least 8 characters long"))]
+    #[validate(custom(function = "validate_password"))]
+    pub new_password: String,
+}
+
 #[derive(Deserialize, Validate)]
 pub struct LoginRequest {
     #[validate(email)]
