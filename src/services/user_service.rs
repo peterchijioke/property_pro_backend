@@ -158,7 +158,6 @@ pub async fn update_password(
                     error_messages,
                 }));
             }
-            //=================check and update=======
             let user_exists = db_operations::user_db_operations::find_user_by_id(
                 &client.db.collection("users"),
                 Some(user_id.clone()),
